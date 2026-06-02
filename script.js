@@ -324,7 +324,7 @@
         if (entries[0].isIntersecting && !statsDone) {
           statsDone = true;
           const nums = $$(".stat-num", statsBar);
-          const targets = [10, 500, 5];
+          const targets = [1, 100, 5];
           nums.forEach((el, i) => {
             const suffix = el.querySelector(".stat-plus, .stat-star");
             const suffixHTML = suffix ? suffix.outerHTML : "";
