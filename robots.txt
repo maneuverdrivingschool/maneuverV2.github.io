@@ -1,0 +1,37 @@
+# ═══════════════════════════════════════════════════════════════
+# Maneuver Driving School — robots.txt
+# https://maneuverdrivingschool.ca/robots.txt
+# ═══════════════════════════════════════════════════════════════
+
+# Allow all major search engine crawlers
+User-agent: *
+Allow: /
+
+# Allow all assets for rich results (images, CSS, JS)
+Allow: /assets/
+Allow: /style.css
+Allow: /script.js
+
+# Disallow any admin or private paths (none currently, listed as future-proofing)
+# Disallow: /admin/
+# Disallow: /private/
+
+# Sitemap location — submit this URL to Google Search Console & Bing Webmaster
+Sitemap: https://maneuverdrivingschool.ca/sitemap.xml
+
+# Crawl delay for polite bots (Bing, etc.) — Google ignores this
+Crawl-delay: 1
+
+# ── Specific bot rules ──────────────────────────────────────────
+# Allow Google Image crawler (important for local image SEO)
+User-agent: Googlebot-Image
+Allow: /assets/
+
+# Allow Google Structured Data Testing
+User-agent: Google-InspectionTool
+Allow: /
+
+# Bing
+User-agent: Bingbot
+Allow: /
+Crawl-delay: 2

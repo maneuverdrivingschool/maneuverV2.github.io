@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset
+  xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+  xmlns:xhtml="http://www.w3.org/1999/xhtml"
+  xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"
+>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       Maneuver Driving School — sitemap.xml
+       Domain: https://maneuverdrivingschool.ca
+       Last updated: 2026-06-02
+       Submit to: https://search.google.com/search-console
+                  https://www.bing.com/webmasters
+  ═══════════════════════════════════════════════════════════ -->
+
+  <!-- HOME — highest priority, most frequently updated -->
+  <url>
+    <loc>https://maneuverdrivingschool.ca/</loc>
+    <lastmod>2026-06-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+    <xhtml:link rel="alternate" hreflang="en-CA" href="https://maneuverdrivingschool.ca/"/>
+    <image:image>
+      <image:loc>https://maneuverdrivingschool.ca/assets/instructor.webp</image:loc>
+      <image:caption>Certified driving instructor with student in Vancouver, BC</image:caption>
+      <image:title>Maneuver Driving School – Vancouver, BC</image:title>
+    </image:image>
+    <image:image>
+      <image:loc>https://maneuverdrivingschool.ca/assets/logowithtext.webp</image:loc>
+      <image:caption>Maneuver Driving School Logo – Driving School in Vancouver BC</image:caption>
+      <image:title>Maneuver Driving School</image:title>
+    </image:image>
+    <image:image>
+      <image:loc>https://maneuverdrivingschool.ca/assets/vancouverroads.webp</image:loc>
+      <image:caption>Vancouver roads driving lessons British Columbia</image:caption>
+      <image:title>Vancouver Roads – Maneuver Driving School</image:title>
+    </image:image>
+    <image:image>
+      <image:loc>https://maneuverdrivingschool.ca/assets/citydriving.webp</image:loc>
+      <image:caption>City driving lessons in Vancouver BC Canada</image:caption>
+      <image:title>City Driving – Maneuver Driving School Vancouver</image:title>
+    </image:image>
+  </url>
+
+  <!-- SECTION ANCHORS — treated as deep-link pages by Google -->
+  <url>
+    <loc>https://maneuverdrivingschool.ca/#about</loc>
+    <lastmod>2026-06-02</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <url>
+    <loc>https://maneuverdrivingschool.ca/#packages</loc>
+    <lastmod>2026-06-02</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+
+  <url>
+    <loc>https://maneuverdrivingschool.ca/#roadtest</loc>
+    <lastmod>2026-06-02</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+
+  <url>
+    <loc>https://maneuverdrivingschool.ca/#testimonials</loc>
+    <lastmod>2026-06-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+
+  <url>
+    <loc>https://maneuverdrivingschool.ca/#faq</loc>
+    <lastmod>2026-06-02</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <url>
+    <loc>https://maneuverdrivingschool.ca/#contact</loc>
+    <lastmod>2026-06-02</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+
+</urlset>
