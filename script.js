@@ -11,7 +11,7 @@
   /* ── DYNAMIC CONFIGURATION ENGINE ───────────────────────── */
   // Clean Workspace Share ID connected via high-performance flat stream
   const SPREADSHEET_ID = "1ho5TrJ6dpJQ5EGcyV_b_CKgF0XRf4Pi6WTfeTPy8ctM";
-  let fallbackWhatsappNumber = "9779863037607";
+  let fallbackWhatsappNumber = "17787232850";
 
   /* ── HELPERS ─────────────────────────────────────────────── */
   const $ = (sel, ctx = document) => ctx.querySelector(sel);
@@ -509,7 +509,7 @@
         if (entries[0].isIntersecting && !statsDone) {
           statsDone = true;
           const nums = $$(".stat-num", statsBar);
-          const targets = [1, 100, 5];
+          const targets = [2, 100, 5];
           nums.forEach((el, i) => {
             const suffix = el.querySelector(".stat-plus, .stat-star");
             const suffixHTML = suffix ? suffix.outerHTML : "";
