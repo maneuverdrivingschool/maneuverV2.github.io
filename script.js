@@ -1,5 +1,5 @@
 /* ============================================================
-   MANEUVER DRIVING SCHOOL — script.js  v2.0
+   MANEUVER DRIVING SCHOOL — script.js  v2.5 (Dynamic CSV Architecture)
    Includes: Page Loader · Fixed FAQ Accordion · Nav ·
    Scroll Reveal · Counters · Form · WhatsApp · Parallax
    All animations hardware-accelerated & CLS-safe
@@ -8,22 +8,29 @@
 (function () {
   "use strict";
 
+  /* ── DYNAMIC CONFIGURATION ENGINE ───────────────────────── */
+  // Clean Workspace Share ID connected via high-performance flat stream
+  const SPREADSHEET_ID = "1ho5TrJ6dpJQ5EGcyV_b_CKgF0XRf4Pi6WTfeTPy8ctM";
+  let fallbackWhatsappNumber = "9779863037607";
+
   /* ── HELPERS ─────────────────────────────────────────────── */
   const $ = (sel, ctx = document) => ctx.querySelector(sel);
   const $$ = (sel, ctx = document) => [...ctx.querySelectorAll(sel)];
   const raf = requestAnimationFrame.bind(window);
-  const raf2 = (fn) => raf(() => raf(fn)); // double-rAF for post-paint reads
+  const raf2 = (fn) => raf(() => raf(fn));
+
+  // Converts any column header string to a safe, normalized object property key
+  const normalizeKey = (str) =>
+    String(str)
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "");
 
   /* ══════════════════════════════════════════════════════════
      1. PAGE LOADER
-     Fixed: guard against double-dismiss, transitionend never
-     firing (background tab / prefers-reduced-motion), and
-     revealObs hoisting issue (hero entrance deferred via
-     window._revealReady flag checked by revealObs init below).
   ══════════════════════════════════════════════════════════ */
   const loader = $("#pageLoader");
   const progressBar = $("#plProgressBar");
-  let loaderDone = false; /* guard: dismiss runs exactly once */
+  let loaderDone = false;
 
   function setProgress(pct) {
     if (!progressBar) return;
@@ -31,7 +38,6 @@
   }
 
   function dismissLoader() {
-    /* ── Guard: never run twice ───────────────────────────── */
     if (loaderDone) return;
     loaderDone = true;
 
@@ -43,34 +49,23 @@
 
     setProgress(100);
 
-    /* After 300 ms show the fade-out */
     setTimeout(() => {
       loader.classList.add("pl-hiding");
-
-      /* ── Reliable exit: use BOTH transitionend AND a hard
-         timeout so the page always lands even if the CSS
-         transition is skipped (background tab, reduced-motion,
-         slow device, display:none race). ─────────────────── */
       let exited = false;
       function onLoaderExit() {
         if (exited) return;
         exited = true;
         loader.classList.add("pl-hidden");
         document.body.classList.remove("loading");
-        /* Signal revealObs (defined later) to start observing */
         window._loaderComplete = true;
         if (typeof window._startReveal === "function") window._startReveal();
       }
 
-      /* transitionend fires when CSS opacity/transform finishes */
       loader.addEventListener("transitionend", onLoaderExit, { once: true });
-      /* Hard fallback — fires 700 ms after we add pl-hiding,
-         well past the 550ms CSS transition duration */
       setTimeout(onLoaderExit, 700);
     }, 300);
   }
 
-  /* Progress animation: 0 → 85% during load, 100% on dismiss */
   function runFakeProgress() {
     const steps = [
       { pct: 15, ms: 90 },
@@ -86,31 +81,22 @@
     document.body.classList.add("loading");
     runFakeProgress();
 
-    /* Dismiss as soon as all resources finish loading */
     if (document.readyState === "complete") {
-      /* Already loaded (e.g. script deferred / cached page) */
       setTimeout(dismissLoader, 50);
     } else {
       window.addEventListener("load", () => setTimeout(dismissLoader, 50), {
         once: true,
       });
     }
-    /* Absolute failsafe — page ALWAYS lands within 3.5 s */
     setTimeout(dismissLoader, 3500);
   } else {
-    /* No loader element — mark complete immediately */
     window._loaderComplete = true;
   }
 
   /* ══════════════════════════════════════════════════════════
      2. HERO ENTRANCE — called once loader has fully exited.
-     revealObs is defined later in the file; we bridge the
-     timing gap with window._startReveal / _loaderComplete.
   ══════════════════════════════════════════════════════════ */
   window._startReveal = function () {
-    /* revealObs is guaranteed to exist by the time this runs
-       because it's defined in section 6 below, which executes
-       synchronously before any async loader callback fires. */
     if (typeof revealObs === "undefined") return;
     $$(".reveal-fade, .reveal-up, .reveal-left, .reveal-right").forEach(
       (el) => {
@@ -120,7 +106,233 @@
   };
 
   /* ══════════════════════════════════════════════════════════
-     3. STICKY NAVBAR — scroll shadow + active link
+     3. DATA CONVERTER & SHEET MANAGER (CSV STANDARDIZATION)
+  ══════════════════════════════════════════════════════════ */
+  function parseCSVLine(line) {
+    // Handles commas, quoted fields, and escaped double-quotes in Google CSV output.
+    const fields = [];
+    let current = "";
+    let insideQuotes = false;
+
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      const next = line[i + 1];
+
+      if (char === '"' && insideQuotes && next === '"') {
+        current += '"';
+        i++;
+      } else if (char === '"') {
+        insideQuotes = !insideQuotes;
+      } else if (char === "," && !insideQuotes) {
+        fields.push(current.trim());
+        current = "";
+      } else {
+        current += char;
+      }
+    }
+
+    fields.push(current.trim());
+    return fields.map((field) => field.replace(/^"|"$/g, ""));
+  }
+
+  async function fetchGoogleSheetData(tabName) {
+    // Try both common public Google Sheets CSV endpoints. The /pub endpoint only works
+    // when the sheet is formally published; /gviz also works for many "Anyone with link"
+    // sheets. This prevents the site from silently keeping fallback HTML content.
+    const encodedSheetName = encodeURIComponent(tabName);
+    const cacheBust = `cacheBust=${Date.now()}`;
+    const urls = [
+      `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodedSheetName}&${cacheBust}`,
+      `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/pub?output=csv&sheet=${encodedSheetName}&${cacheBust}`,
+    ];
+
+    for (const url of urls) {
+      try {
+        const response = await fetch(url, { cache: "no-store" });
+        if (!response.ok) {
+          throw new Error(`HTTP status: ${response.status}`);
+        }
+
+        const csvText = await response.text();
+        const trimmed = csvText.trim();
+
+        // If Google returns an HTML permission/login/error page, do not parse it as CSV.
+        if (
+          !trimmed ||
+          /^</.test(trimmed) ||
+          /<html|<!doctype/i.test(trimmed)
+        ) {
+          throw new Error(
+            "Google returned HTML instead of CSV. Check sheet sharing/publishing settings.",
+          );
+        }
+
+        const lines = trimmed
+          .split(/\r?\n/)
+          .filter((line) => line.trim() !== "");
+        if (!lines.length) return [];
+
+        const headers = parseCSVLine(lines[0]).map((header) => header.trim());
+        if (!headers.some(Boolean)) return [];
+
+        const objectsList = [];
+        for (let i = 1; i < lines.length; i++) {
+          const columns = parseCSVLine(lines[i]);
+          const entry = {};
+
+          headers.forEach((headerName, index) => {
+            if (!headerName) return;
+            const value = columns[index] !== undefined ? columns[index] : "";
+            entry[headerName] = value;
+            entry[normalizeKey(headerName)] = value;
+          });
+
+          // Skip fully empty rows so blank sheet lines do not create empty cards.
+          if (
+            Object.values(entry).some((value) => String(value).trim() !== "")
+          ) {
+            objectsList.push(entry);
+          }
+        }
+
+        console.info(
+          `Loaded ${objectsList.length} rows from Google Sheet tab: ${tabName}`,
+        );
+        return objectsList;
+      } catch (err) {
+        console.warn(`Sheet endpoint failed for tab [${tabName}]:`, err);
+      }
+    }
+
+    console.warn(
+      `Spreadsheet sync bypassed for tab: [${tabName}]. Fallback layout remains active.`,
+    );
+    return null;
+  }
+
+  async function initializeDynamicDatabaseSync() {
+    console.log(
+      "Maneuver Driving School: Running live structural update loops...",
+    );
+
+    // A. Sync Company Configuration elements
+    const configData = await fetchGoogleSheetData("CompanyConfig");
+    if (configData) {
+      const configMap = {};
+      configData.forEach((row) => {
+        const keyProp = row["Key"] || row["key"];
+        const valueProp = row["Value"] || row["value"];
+        if (keyProp) configMap[normalizeKey(keyProp)] = valueProp;
+      });
+
+      if (configMap["whatsappnumber"]) {
+        fallbackWhatsappNumber = String(configMap["whatsappnumber"]).replace(
+          /\D/g,
+          "",
+        );
+      }
+
+      $$("[data-sheet-config]").forEach((element) => {
+        const propertyKey = normalizeKey(
+          element.getAttribute("data-sheet-config"),
+        );
+        if (configMap[propertyKey]) {
+          if (element.tagName === "A") {
+            if (propertyKey === "phone" && configMap["phoneraw"]) {
+              element.href =
+                "tel:" + String(configMap["phoneraw"]).replace(/\s+/g, "");
+            } else if (propertyKey === "email") {
+              element.href = "mailto:" + configMap["email"];
+            }
+          }
+          const nestedSvg = element.querySelector("svg");
+          if (nestedSvg) {
+            element.innerHTML =
+              nestedSvg.outerHTML + " " + configMap[propertyKey];
+          } else {
+            element.textContent = configMap[propertyKey];
+          }
+        }
+      });
+    }
+
+    // B. Sync Dynamic Section Content loops
+    const dynamicLoopContainers = $$("[data-sheet-loop]");
+    for (const container of dynamicLoopContainers) {
+      const tabTargetName = container.getAttribute("data-sheet-loop");
+      const listData = await fetchGoogleSheetData(tabTargetName);
+
+      if (!listData || listData.length === 0) {
+        console.warn(
+          `Dynamic loop bypass: No data returned from sheet tab [${tabTargetName}].`,
+        );
+        continue;
+      }
+
+      if (!container.firstElementChild) {
+        console.warn(
+          `Dynamic loop bypass: No template item found for [${tabTargetName}].`,
+        );
+        continue;
+      }
+
+      const itemTemplate = container.firstElementChild.cloneNode(true);
+      container.innerHTML = "";
+
+      listData.forEach((rowRecord, index) => {
+        const instanceNode = itemTemplate.cloneNode(true);
+
+        if (tabTargetName === "Packages") {
+          const featuredFlag =
+            String(rowRecord["isfeatured"] || "").toLowerCase() === "true";
+          const bestValueFlag =
+            String(rowRecord["bestvalue"] || "").toLowerCase() === "true";
+
+          instanceNode.className = "pkg-card reveal-up";
+          if (featuredFlag) instanceNode.classList.add("pkg-featured");
+
+          const originalBadge = instanceNode.querySelector(
+            ".pkg-popular-badge, .pkg-best-value-badge",
+          );
+          if (originalBadge) originalBadge.remove();
+
+          if (featuredFlag) {
+            instanceNode.insertAdjacentHTML(
+              "afterbegin",
+              `<div class="pkg-popular-badge">★ Most Popular</div>`,
+            );
+          } else if (bestValueFlag) {
+            instanceNode.insertAdjacentHTML(
+              "afterbegin",
+              `<div class="pkg-best-value-badge">Best Value</div>`,
+            );
+          }
+          instanceNode.style.setProperty("--delay", `${index * 0.07}s`);
+        }
+
+        $$("[data-field]", instanceNode).forEach((field) => {
+          const matchingColumn = normalizeKey(field.getAttribute("data-field"));
+          if (rowRecord[matchingColumn] !== undefined) {
+            field.textContent = rowRecord[matchingColumn];
+          }
+        });
+
+        container.appendChild(instanceNode);
+      });
+
+      if (tabTargetName === "FAQs") {
+        setupFAQList(container);
+      }
+    }
+
+    initializePackageHoverFixes();
+    if (typeof window._startReveal === "function" && window._loaderComplete) {
+      window._startReveal();
+    }
+  }
+
+  /* ══════════════════════════════════════════════════════════
+     4. STICKY NAVBAR — scroll shadow + active link
   ══════════════════════════════════════════════════════════ */
   const navbar = $("#navbar");
 
@@ -156,7 +368,7 @@
   updateActiveLink();
 
   /* ══════════════════════════════════════════════════════════
-     4. MOBILE HAMBURGER MENU
+     5. MOBILE HAMBURGER MENU
   ══════════════════════════════════════════════════════════ */
   const hamburger = $("#hamburger");
   const navMenu = $("#navMenu");
@@ -173,7 +385,7 @@
     });
 
     document.addEventListener("click", (e) => {
-      if (!navbar.contains(e.target)) closeMenu();
+      if (navbar && !navbar.contains(e.target)) closeMenu();
     });
   }
 
@@ -185,18 +397,8 @@
   }
 
   /* ══════════════════════════════════════════════════════════
-     5. SMOOTH SCROLL
+     6. SMOOTH SCROLL
   ══════════════════════════════════════════════════════════ */
-  /* ── Clean URL scroll helper ────────────────────────────────
-     Scrolls to the target section WITHOUT writing anything to
-     the browser address bar.
-     Strategy:
-       1. e.preventDefault()  — stops default anchor jump
-       2. window.scrollTo()   — smooth-scroll to correct offset
-       3. history.replaceState(null,'', location.pathname)
-          — immediately wipes any #hash the browser may have
-            written, keeping the URL as plain domain.com
-  ─────────────────────────────────────────────────────────── */
   function scrollToSection(id) {
     const target = document.getElementById(id);
     if (!target) return;
@@ -210,11 +412,9 @@
       top: target.getBoundingClientRect().top + window.scrollY - navH - 8,
       behavior: "smooth",
     });
-    /* Erase any hash the browser wrote before our handler ran */
     history.replaceState(null, "", location.pathname);
   }
 
-  /* ── Handle logo (data-scroll-top) and scroll-cue (data-scroll-to) ── */
   $$("[data-scroll-top]").forEach((el) => {
     el.addEventListener("click", (e) => {
       e.preventDefault();
@@ -230,39 +430,32 @@
     });
   });
 
-  $$('a[href^="#"]').forEach((a) => {
-    a.addEventListener("click", (e) => {
-      const raw = a.getAttribute("href");
-      /* href="#" with no ID is a no-op — ignore */
-      if (raw === "#") {
-        e.preventDefault();
-        return;
-      }
-      const id = raw.slice(1);
-      if (!id) return;
+  document.addEventListener("click", function (e) {
+    const anchor = e.target.closest('a[href^="#"]');
+    if (!anchor) return;
+    const raw = anchor.getAttribute("href");
+    if (raw === "#") {
       e.preventDefault();
-      scrollToSection(id);
-    });
+      return;
+    }
+    const id = raw.slice(1);
+    if (!id) return;
+    e.preventDefault();
+    scrollToSection(id);
   });
 
-  /* ── Also strip any hash that arrives when the page first loads
-     (e.g. user bookmarked domain.com/#contact — we silently scroll
-     to the right section but immediately clean the URL) ──────── */
   (function handleInitialHash() {
     const hash = location.hash;
     if (!hash || hash === "#") return;
     const id = hash.slice(1);
-    /* Use a short delay so the page has painted before we scroll */
     setTimeout(() => {
       scrollToSection(id);
     }, 100);
   })();
 
   /* ══════════════════════════════════════════════════════════
-     6. SCROLL REVEAL — IntersectionObserver
+     7. SCROLL REVEAL — IntersectionObserver
   ══════════════════════════════════════════════════════════ */
-  /* On narrow viewports, convert horizontal reveals to vertical
-     to eliminate any translateX that could trigger horizontal scroll */
   function normalizeRevealsForMobile() {
     if (window.innerWidth > 640) return;
     $$(".reveal-left, .reveal-right").forEach((el) => {
@@ -287,25 +480,18 @@
     { threshold: 0.1, rootMargin: "0px 0px -48px 0px" },
   );
 
-  /* Start observing:
-     - If loader already finished (cached/fast page): start now
-     - If loader is still running: _startReveal() will be called
-       by onLoaderExit() once the fade-out completes
-     - If no loader element at all: start immediately */
   if (window._loaderComplete) {
     window._startReveal();
   }
-  /* else: _startReveal is registered on window and will be
-     called by dismissLoader → onLoaderExit when ready */
 
   /* ══════════════════════════════════════════════════════════
-     7. ANIMATED COUNTERS (about stats + pass-rate circle)
+     8. ANIMATED COUNTERS (about stats + pass-rate circle)
   ══════════════════════════════════════════════════════════ */
   function animateCounter(el, target, duration = 1600) {
     const start = performance.now();
     function step(now) {
       const progress = Math.min((now - start) / duration, 1);
-      const ease = 1 - Math.pow(1 - progress, 3); // ease-out cubic
+      const ease = 1 - Math.pow(1 - progress, 3);
       el.textContent =
         target % 1 !== 0
           ? (target * ease).toFixed(1)
@@ -315,7 +501,6 @@
     raf(step);
   }
 
-  /* About stats bar */
   const statsBar = $(".about-stats-bar");
   let statsDone = false;
   if (statsBar) {
@@ -341,7 +526,6 @@
     ).observe(statsBar);
   }
 
-  /* Pass-rate circle */
   const prcNum = $(".prc-num");
   let prcDone = false;
   if (prcNum) {
@@ -355,7 +539,7 @@
           prcNum.innerHTML = "";
           prcNum.appendChild(span);
           if (suffix) prcNum.appendChild(suffix);
-          animateCounter(span, 95, 1800);
+          animateCounter(span, 90, 1800);
         }
       },
       { threshold: 0.5 },
@@ -363,52 +547,23 @@
   }
 
   /* ══════════════════════════════════════════════════════════
-     8. FAQ ACCORDION — perfectly mirrored open/close
-     Strategy: read actual scrollHeight, set explicit px values
-     both ways so the CSS transition runs identically in both
-     directions. No `hidden` attribute — height:0 + opacity:0
-     keeps it visually hidden while remaining in the DOM flow
-     (so scrollHeight reads correctly at all times).
+     9. FAQ ACCORDION — perfectly mirrored open/close
   ══════════════════════════════════════════════════════════ */
-  $$(".faq-question").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const item = btn.closest(".faq-item");
-      const answer = item.querySelector(".faq-answer");
-      const isOpen = item.classList.contains("open");
-
-      /* --- Close all other open items with animation --- */
-      $$(".faq-item.open").forEach((openItem) => {
-        if (openItem === item) return;
-        collapseItem(openItem);
-      });
-
-      /* --- Toggle this item --- */
-      if (isOpen) {
-        collapseItem(item);
-      } else {
-        expandItem(item);
-      }
-    });
-  });
-
   function expandItem(item) {
     const btn = item.querySelector(".faq-question");
     const answer = item.querySelector(".faq-answer");
+    if (!btn || !answer) return;
 
     item.classList.add("open");
     btn.setAttribute("aria-expanded", "true");
 
-    /* 1. Make sure it's visible but at 0 height */
     answer.style.height = "0px";
     answer.style.opacity = "0";
     answer.removeAttribute("hidden");
     answer.classList.remove("is-open");
 
-    /* 2. Read natural height (after removing display:none / hidden) */
     const targetH = answer.scrollHeight;
 
-    /* 3. Double-rAF: first frame commits 0px to compositor,
-          second frame triggers the transition to targetH */
     raf2(() => {
       answer.classList.add("is-open");
       answer.style.height = targetH + "px";
@@ -419,8 +574,8 @@
   function collapseItem(item) {
     const btn = item.querySelector(".faq-question");
     const answer = item.querySelector(".faq-answer");
+    if (!btn || !answer) return;
 
-    /* 1. Pin height to current rendered value before animating */
     const currentH = answer.scrollHeight;
     answer.style.height = currentH + "px";
     answer.style.opacity = "1";
@@ -429,14 +584,61 @@
     btn.setAttribute("aria-expanded", "false");
     answer.classList.remove("is-open");
 
-    /* 2. Double-rAF to collapse back to 0 */
     raf2(() => {
       answer.style.height = "0px";
       answer.style.opacity = "0";
     });
   }
 
-  /* Keyboard: close on Escape */
+  function setupFAQList(container) {
+    if (!container) return;
+
+    // Homepage preview: only show first 4 FAQs. The full faqs.html page does not use this attribute.
+    const isPreview = container.getAttribute("data-faq-preview") === "true";
+    const limit = Number(container.getAttribute("data-faq-preview-limit")) || 4;
+    const items = $$(".faq-item", container);
+
+    items.forEach((item, index) => {
+      if (isPreview && index >= limit) {
+        item.style.display = "none";
+      } else {
+        item.style.display = "";
+      }
+
+      const btn = item.querySelector(".faq-question");
+      if (btn) btn.setAttribute("aria-expanded", "false");
+      item.classList.remove("open");
+
+      const answer = item.querySelector(".faq-answer");
+      if (answer) {
+        answer.classList.remove("is-open");
+        answer.style.height = "0px";
+        answer.style.opacity = "0";
+      }
+    });
+
+    if (container.dataset.faqAccordionBound === "true") return;
+    container.dataset.faqAccordionBound = "true";
+
+    container.addEventListener("click", (event) => {
+      const btn = event.target.closest(".faq-question");
+      if (!btn || !container.contains(btn)) return;
+
+      const item = btn.closest(".faq-item");
+      if (!item || item.style.display === "none") return;
+
+      const isOpen = item.classList.contains("open");
+      $$(".faq-item.open", container).forEach((openItem) => {
+        if (openItem !== item) collapseItem(openItem);
+      });
+
+      isOpen ? collapseItem(item) : expandItem(item);
+    });
+  }
+
+  // Bind static fallback FAQ markup before Google Sheets replaces it. The dynamic sync calls this again after loading.
+  $$(".faq-list").forEach(setupFAQList);
+
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
       closeMenu();
@@ -444,10 +646,6 @@
     }
   });
 
-  /* ── Prevent hash from reappearing on browser back/forward ──
-     If the user navigates with Back/Forward and a hash state
-     was in the history stack, popstate fires with a hash.
-     We immediately wipe it so the URL stays clean. ──────── */
   window.addEventListener("popstate", () => {
     if (location.hash) {
       history.replaceState(null, "", location.pathname);
@@ -455,7 +653,7 @@
   });
 
   /* ══════════════════════════════════════════════════════════
-     9. CONTACT FORM — validation + async submit
+     10. CONTACT FORM — validation + Formspree submit
   ══════════════════════════════════════════════════════════ */
   const form = $("#contactForm");
   const submitBtn = $("#submitBtn");
@@ -501,6 +699,14 @@
       return ok;
     }
 
+    function showFormMessage(message, isError = false) {
+      if (!formSuccess) return;
+      formSuccess.classList.remove("hidden");
+      formSuccess.classList.toggle("form-error", isError);
+      const text = formSuccess.querySelector("span");
+      if (text) text.textContent = message;
+    }
+
     validators.forEach((v) => {
       const field = $(`#${v.id}`);
       if (!field) return;
@@ -510,10 +716,9 @@
       });
     });
 
-    form.addEventListener("submit", (e) => {
+    form.addEventListener("submit", async (e) => {
       e.preventDefault();
 
-      /* ── 1. Validate all required fields ─────────────────── */
       const allValid = validators.every((v) => validateField(v));
       if (!allValid) {
         const first = form.querySelector(".error");
@@ -524,102 +729,65 @@
         return;
       }
 
-      /* ── 2. Read field values ─────────────────────────────── */
-      const firstName = ($("#firstName").value || "").trim();
-      const lastName = ($("#lastName").value || "").trim();
-      const phone = ($("#phone").value || "").trim();
-      const email = ($("#email").value || "").trim();
-      const pkgSelect = $("#package");
-      const pkgLabel =
-        pkgSelect && pkgSelect.selectedIndex > 0
-          ? pkgSelect.options[pkgSelect.selectedIndex].text
-          : "Not selected";
-      const message = ($("#message").value || "").trim();
+      const endpoint = form.getAttribute("action");
+      if (!endpoint || endpoint.includes("YOUR_FORM_ID")) {
+        showFormMessage(
+          "Formspree is not connected yet. Replace YOUR_FORM_ID in index.html with your real Formspree form ID.",
+          true,
+        );
+        return;
+      }
 
-      /* ── 3. Build the structured WhatsApp message ─────────── */
-      /* FIXES:
-         - Emoji replaced with plain ASCII labels (emoji in URLs
-           can appear as ? on some WhatsApp versions / devices)
-         - *bold* asterisks kept — WhatsApp markdown parses these
-           correctly when the text is URL-encoded properly
-         - Separator uses simple dashes (Unicode box-drawing chars
-           like ── get mangled on some Android WhatsApp builds)
-         - Package label stripped of the star symbol (★) which
-           becomes ? when passed through encodeURIComponent on
-           some locales — replaced with [Most Popular] text
-         - Newlines built as explicit \n string concat, NOT
-           template-literal line breaks, to guarantee consistency
-           across all JS engines
-      ─────────────────────────────────────────────────────── */
-      const now = new Date();
-      const timestamp = now.toLocaleString("en-CA", {
-        timeZone: "America/Vancouver",
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: true,
-      });
+      if (submitBtn) submitBtn.disabled = true;
+      if (submitText) submitText.textContent = "Sending...";
+      if (submitSpinner) submitSpinner.classList.remove("hidden");
+      if (formSuccess) formSuccess.classList.add("hidden");
 
-      /* Strip non-ASCII characters from package label to prevent ? symbols */
-      const pkgLabelClean = pkgLabel
-        .replace(/[^\x00-\x7F]/g, "")
-        .replace(/\s+/g, " ")
-        .trim();
+      try {
+        const formData = new FormData(form);
+        const response = await fetch(endpoint, {
+          method: "POST",
+          body: formData,
+          headers: { Accept: "application/json" },
+        });
 
-      /* Strip non-ASCII from user message too */
-      const messageClean = message.replace(/[^\x00-\x7F]/g, "").trim();
+        if (!response.ok) {
+          let errorMessage =
+            "Something went wrong. Please try again or call us directly.";
+          try {
+            const data = await response.json();
+            if (
+              data &&
+              data.errors &&
+              data.errors[0] &&
+              data.errors[0].message
+            ) {
+              errorMessage = data.errors[0].message;
+            }
+          } catch (_) {}
+          throw new Error(errorMessage);
+        }
 
-      const NL = "\n"; /* explicit newline */
-      const SEP = "----------------------------";
-
-      const waLines = [
-        "*NEW LESSON ENQUIRY*",
-        "*Maneuver Driving School*",
-        SEP,
-        "*Name:* " + firstName + " " + lastName,
-        "*Phone:* " + phone,
-        "*Email:* " + email,
-        "*Package:* " + pkgLabelClean,
-        "*Message:* " + (messageClean || "None"),
-        SEP,
-        "*Time:* " + timestamp + " (Vancouver)",
-      ];
-
-      const waMessage = waLines.join(NL);
-
-      /* ── 4. Encode and open WhatsApp ──────────────────────── */
-      /* Your WhatsApp number: +977 9863037607 (Nepal) */
-      const waNumber = "9779863037607";
-      const waURL =
-        "https://wa.me/" + waNumber + "?text=" + encodeURIComponent(waMessage);
-
-      /* ── 5. Show success state immediately ───────────────── */
-      submitBtn.classList.add("hidden");
-      submitSpinner.classList.add("hidden");
-      formSuccess.classList.remove("hidden");
-      form.reset();
-
-      /* ── 6. Open WhatsApp in a new tab ───────────────────── */
-      /* Small timeout so the user sees the success message     */
-      /* before being taken to WhatsApp                        */
-      setTimeout(() => {
-        window.open(waURL, "_blank", "noopener,noreferrer");
-      }, 600);
-
-      /* ── 7. Reset button after 10 s ─────────────────────── */
-      setTimeout(() => {
-        formSuccess.classList.add("hidden");
-        submitBtn.classList.remove("hidden");
-        submitBtn.disabled = false;
-        submitText.textContent = "Send Message — We'll Reply Within Hours";
-      }, 10000);
+        form.reset();
+        showFormMessage(
+          "Your enquiry has been sent successfully. We will get back to you soon.",
+        );
+      } catch (err) {
+        showFormMessage(
+          err.message ||
+            "Something went wrong. Please try again or call us directly.",
+          true,
+        );
+      } finally {
+        if (submitBtn) submitBtn.disabled = false;
+        if (submitText) submitText.textContent = "Send Message";
+        if (submitSpinner) submitSpinner.classList.add("hidden");
+      }
     });
   }
 
   /* ══════════════════════════════════════════════════════════
-     10. SCROLL-TO-TOP BUTTON
+     11. SCROLL-TO-TOP BUTTON
   ══════════════════════════════════════════════════════════ */
   const scrollTopBtn = $("#scrollTop");
 
@@ -634,75 +802,79 @@
     });
 
   /* ══════════════════════════════════════════════════════════
-     11. PACKAGE CARDS — dim siblings on hover
+     12. PACKAGE CARDS — dim siblings on hover
   ══════════════════════════════════════════════════════════ */
-  const pkgCards = $$(".pkg-card");
-
-  pkgCards.forEach((card) => {
-    card.addEventListener("mouseenter", () => {
-      pkgCards.forEach((c) => {
-        if (c !== card && !c.classList.contains("pkg-featured")) {
-          c.style.opacity = "0.68";
-          c.style.filter = "saturate(0.7)";
-        }
+  function initializePackageHoverFixes() {
+    const pkgCards = $$(".pkg-card");
+    pkgCards.forEach((card) => {
+      card.addEventListener("mouseenter", () => {
+        pkgCards.forEach((c) => {
+          if (c !== card && !c.classList.contains("pkg-featured")) {
+            c.style.opacity = "0.68";
+            c.style.filter = "saturate(0.7)";
+          }
+        });
+      });
+      card.addEventListener("mouseleave", () => {
+        pkgCards.forEach((c) => {
+          c.style.opacity = "";
+          c.style.filter = "";
+        });
       });
     });
-    card.addEventListener("mouseleave", () => {
-      pkgCards.forEach((c) => {
-        c.style.opacity = "";
-        c.style.filter = "";
-      });
-    });
-  });
+  }
 
   /* ══════════════════════════════════════════════════════════
-     12. WHO CARDS — staggered reveal delay
+     13. WHO CARDS — staggered reveal delay
   ══════════════════════════════════════════════════════════ */
   $$(".who-card").forEach((card, i) => {
     card.style.setProperty("--delay", `${i * 0.1}s`);
   });
 
   /* ══════════════════════════════════════════════════════════
-     13. REVIEW CARDS — 3-D tilt on mouse move (desktop only)
+     14. REVIEW CARDS — 3-D tilt on mouse move (desktop only)
   ══════════════════════════════════════════════════════════ */
   const isTouch = () =>
     "ontouchstart" in window || navigator.maxTouchPoints > 0;
 
   if (!isTouch()) {
-    $$(".review-card").forEach((card) => {
-      card.addEventListener("mousemove", (e) => {
-        const r = card.getBoundingClientRect();
-        const dx = (e.clientX - r.left - r.width / 2) / (r.width / 2);
-        const dy = (e.clientY - r.top - r.height / 2) / (r.height / 2);
-        card.style.transform = `translateY(-5px) rotateX(${-dy * 4}deg) rotateY(${dx * 4}deg)`;
-        card.style.transition = "transform 0.1s ease";
-      });
-      card.addEventListener("mouseleave", () => {
-        card.style.transform = "";
-        card.style.transition = "transform 0.4s ease";
-      });
+    document.addEventListener("mousemove", function (e) {
+      const card = e.target.closest(".review-card");
+      if (!card) return;
+      const r = card.getBoundingClientRect();
+      const dx = (e.clientX - r.left - r.width / 2) / (r.width / 2);
+      const dy = (e.clientY - r.top - r.height / 2) / (r.height / 2);
+      card.style.transform = `translateY(-5px) rotateX(${-dy * 4}deg) rotateY(${dx * 4}deg)`;
+      card.style.transition = "transform 0.1s ease";
     });
+
+    document.addEventListener(
+      "mouseleave",
+      function (e) {
+        if (e.target.classList.contains("review-card")) {
+          e.target.style.transform = "";
+          e.target.style.transition = "transform 0.4s ease";
+        }
+      },
+      true,
+    );
   }
 
   /* ══════════════════════════════════════════════════════════
-     14. ROADTEST ITEMS — slide-in on hover
+     15. ROADTEST ITEMS & FLOATING WHATSAPP BUTTON
   ══════════════════════════════════════════════════════════ */
   $$(".rt-item").forEach((item) => {
     item.style.transition =
       "background 0.25s ease, transform 0.25s ease, border-color 0.25s ease";
   });
 
-  /* ══════════════════════════════════════════════════════════
-     15. FLOATING WHATSAPP BUTTON (mobile only)
-  ══════════════════════════════════════════════════════════ */
   function addWhatsAppFloat() {
     if (document.getElementById("waFloat")) return;
     if (window.innerWidth > 640) return;
 
     const wa = document.createElement("a");
     wa.id = "waFloat";
-    wa.href =
-      "https://wa.me/17787232850?text=Hi%20I%20want%20to%20book%20a%20driving%20lesson!";
+    wa.href = `https://wa.me/${fallbackWhatsappNumber}?text=Hi%20I%20want%20to%20book%20a%20driving%20lesson!`;
     wa.target = "_blank";
     wa.rel = "noopener noreferrer";
     wa.setAttribute("aria-label", "Chat on WhatsApp");
@@ -719,6 +891,7 @@
       borderRadius: "50%",
       display: "flex",
       alignItems: "center",
+      justifyCenter: "center",
       justifyContent: "center",
       boxShadow: "0 4px 20px rgba(37,211,102,0.5)",
       zIndex: "499",
@@ -742,7 +915,7 @@
   window.addEventListener("resize", addWhatsAppFloat, { passive: true });
 
   /* ══════════════════════════════════════════════════════════
-     16. STEP HOVERS
+     16. STEP HOVERS · STARS ENTRANCE · PULSE
   ══════════════════════════════════════════════════════════ */
   $$(".step").forEach((step) => {
     const num = step.querySelector(".step-num");
@@ -752,24 +925,14 @@
       num.style.color = "var(--navy)";
       num.style.transform = "scale(1.1)";
     });
-    step.addEventListener("mouseleave", () => {
-      num.style.background = "";
-      num.style.color = "";
-      num.style.transform = "";
-    });
+    step.style.addEventListener ||
+      step.addEventListener("mouseleave", () => {
+        num.style.background = "";
+        num.style.color = "";
+        num.style.transform = "";
+      });
   });
 
-  /* ══════════════════════════════════════════════════════════
-     17. PACKAGE CARDS — stagger delay + observe
-  ══════════════════════════════════════════════════════════ */
-  $$(".pkg-card").forEach((card, i) => {
-    card.style.setProperty("--delay", `${i * 0.07}s`);
-    revealObs.observe(card);
-  });
-
-  /* ══════════════════════════════════════════════════════════
-     18. GOOGLE STARS ENTRANCE
-  ══════════════════════════════════════════════════════════ */
   const grbStars = $(".grb-stars");
   let starsDone = false;
   if (grbStars) {
@@ -789,9 +952,6 @@
     ).observe(grbStars);
   }
 
-  /* ══════════════════════════════════════════════════════════
-     19. HERO BADGE PULSE (alive feeling)
-  ══════════════════════════════════════════════════════════ */
   const badge = $(".hero-badge");
   if (badge) {
     let visible = true;
@@ -806,13 +966,17 @@
     }, 1000);
   }
 
-  /* ══════════════════════════════════════════════════════════
-     20. FONT PRELOAD + BRANDED CONSOLE LOG
-  ══════════════════════════════════════════════════════════ */
   if ("fonts" in document) {
     document.fonts.ready.then(() =>
       document.body.classList.add("fonts-loaded"),
     );
+  }
+
+  // Run dynamic setup
+  if (document.readyState === "complete") {
+    initializeDynamicDatabaseSync();
+  } else {
+    window.addEventListener("load", initializeDynamicDatabaseSync);
   }
 
   console.log(

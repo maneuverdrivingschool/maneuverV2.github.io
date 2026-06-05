@@ -1,6 +1,6 @@
 /* ============================================================
-   MANEUVER DRIVING SCHOOL — style.css
-   Premium Navy & Gold Design System
+    MANEUVER DRIVING SCHOOL — style.css
+    Premium Navy & Gold Design System
    ============================================================ */
 
 /* ── RESET & ROOT ───────────────────────────────────────────── */
@@ -469,8 +469,8 @@ body.loading {
   z-index: 1000;
   height: var(--nav-height);
   background: rgba(10, 22, 40, 0.97);
-  backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   transition: var(--transition);
 }
@@ -2072,8 +2072,8 @@ body.loading {
   color: var(--text-dark);
   transition: color 0.22s ease;
   cursor: pointer;
-  user-select: none;
   -webkit-user-select: none;
+  user-select: none;
 }
 
 .faq-question:hover {
@@ -2128,6 +2128,25 @@ body.loading {
   color: var(--text-body);
   font-size: 15.5px;
   line-height: 1.72;
+}
+
+
+
+/* FAQ preview on homepage: keep first 4 only, full FAQ page remains unlimited */
+.faq-list[data-faq-preview="true"] .faq-item:nth-child(n + 5) {
+  display: none;
+}
+
+.faq-preview-actions,
+.faq-page-bottom-cta {
+  display: flex;
+  justify-content: center;
+  margin-top: 28px;
+}
+
+.faq-view-more-link {
+  min-width: 170px;
+  justify-content: center;
 }
 
 /* ── CONTACT ───────────────────────────────────────────────── */
@@ -2280,8 +2299,8 @@ body.loading {
   width: 100%;
   outline: none;
   transition: var(--transition);
-  appearance: none;
   -webkit-appearance: none;
+  appearance: none;
 }
 
 .form-group input::placeholder,
@@ -2341,6 +2360,14 @@ body.loading {
   border-radius: var(--radius-sm);
   font-weight: 500;
   font-size: 15px;
+}
+
+
+
+.form-success.form-error {
+  background: rgba(255, 90, 90, 0.12);
+  border-color: rgba(255, 90, 90, 0.38);
+  color: #FFB3B3;
 }
 
 .form-footnote {
@@ -3129,5 +3156,105 @@ body.loading {
 
   .footer-logo-img {
     height: 44px;
+  }
+}
+
+/* ============================================================
+   FAQ PAGE HERO FIX
+   Prevents the fixed navbar from cropping the faq.html hero area
+   and keeps the dedicated FAQ page aligned with the main design.
+   ============================================================ */
+.faq-page main {
+  padding-top: var(--nav-height);
+}
+
+.faq-page-hero {
+  position: relative;
+  overflow: hidden;
+  background: var(--navy);
+  color: var(--white);
+  padding: clamp(76px, 9vw, 120px) 0 clamp(70px, 8vw, 105px);
+  isolation: isolate;
+}
+
+.faq-page-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  background: linear-gradient(145deg,
+      var(--navy) 0%,
+      var(--navy-mid) 48%,
+      #152848 78%,
+      #1A2E55 100%);
+}
+
+.faq-page-hero-bg {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.faq-page-hero .hero-orb-1 {
+  opacity: 0.9;
+}
+
+.faq-page-hero .hero-orb-2 {
+  opacity: 0.7;
+}
+
+.faq-page-hero-inner {
+  position: relative;
+  z-index: 1;
+  max-width: 880px;
+  text-align: left;
+}
+
+.faq-page-title {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: clamp(42px, 6vw, 72px);
+  font-weight: 900;
+  color: var(--white);
+  line-height: 1.06;
+  letter-spacing: -0.025em;
+  margin: 0 0 22px;
+}
+
+.faq-page-subtitle {
+  max-width: 760px;
+  color: rgba(255, 255, 255, 0.74);
+  font-size: clamp(16px, 1.8vw, 19px);
+  line-height: 1.75;
+  margin: 0 0 30px;
+}
+
+.faq-page-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.faq-page .faq-full-section {
+  background: var(--cream);
+  padding-top: clamp(72px, 8vw, 100px);
+}
+
+@media (max-width: 768px) {
+  .faq-page-hero {
+    padding: 64px 0 70px;
+  }
+
+  .faq-page-hero-inner {
+    text-align: center;
+  }
+
+  .faq-page-subtitle {
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .faq-page-actions {
+    justify-content: center;
   }
 }
